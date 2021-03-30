@@ -8,6 +8,7 @@ import java.util.*;
 
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
@@ -18,53 +19,57 @@ import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.KeyValueTextInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
+import org.apache.hadoop.util.Tool;
 
-public class HadoopWithPII {
+public class HadoopWithPII extends Configured implements Tool {
 
-        public static class PIIExtractionMapper
-                extends Mapper<Text, Text, Text, Text> {
+    @Override
+    public int run(String[] strings) throws Exception {
 
+        Job job = new Job(getConf(), "pii Extraction");
+        job.setJarByClass(HadoopWithPII.class);
 
+        job.setMapperClass(PIIExtractionMapper.class);
+        job.setInputFormatClass(KeyValueTextInputFormat.class);
+        job.setOutputFormatClass(TextOutputFormat.class);
 
-            public void map(Text key, Text value, Context context) throws IOException, InterruptedException {
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(Text.class);
 
-                File f = new File(value.toString());
-                BufferedReader bf = new BufferedReader(new FileReader(f));
-                String line = "";
+        FileInputFormat.setInputPaths(job, new Path("/input"));
+        FileOutputFormat.setOutputPath(job, new Path("/output"));
+        int a = job.waitForCompletion(true) ? 0 : 1;
+        return a;
+    }
 
-                StringBuilder br = new StringBuilder();
+    public static class PIIExtractionMapper
+            extends Mapper<Text, Text, Text, Text> {
 
-                while((line = bf.readLine()) != null){
-                    br.append(line);
-                }
+        @Override
+        protected void map(Text key, Text value, Context context)
+                throws IOException, InterruptedException {
 
-                HashMap<String, String> piiList =  new PiiExtraction().getPiiExtraction(br.toString());
-                for(Map.Entry<String, String> list : piiList.entrySet()){
-                    String output = list.getKey() + "   " + list.getValue();
+            File f = new File(value.toString());
+            BufferedReader bf = new BufferedReader(new FileReader(f));
+            String line = "";
 
-                    context.write(key, new Text(output));
-                }
+            StringBuilder br = new StringBuilder();
 
-
-
+            while((line = bf.readLine()) != null){
+                br.append(line);
             }
-        }
 
-
-
-        public static void main(String[] args) throws Exception {
-
-            Configuration conf = new Configuration();
-            Job job = Job.getInstance(conf, "pii Extraction");
-            job.setJarByClass(HadoopWithPII.class);
-            job.setMapperClass(PIIExtractionMapper.class);
-            job.setOutputKeyClass(Text.class);
-            job.setOutputValueClass(Text.class);
-            job.setInputFormatClass(KeyValueTextInputFormat.class);
-            FileInputFormat.addInputPath(job, new Path("/input"));
-            FileOutputFormat.setOutputPath(job, new Path("/output"));
-            System.exit(job.waitForCompletion(true) ? 0 : 1);
-
+            HashMap<String, String> piiList =  new PiiExtraction().getPiiExtraction(br.toString());
+//            for(Map.Entry<String, String> list : piiList.entrySet()){
+//                String output = list.getKey() + "   " + list.getValue();
+//
+//
+//            }
+            context.write(key, new Text(piiList.toString()));
         }
     }
+
+}
+
 
